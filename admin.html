@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚙️ Admin - Gestione Negozi</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+        body { background: #0f0f0f; min-height: 100vh; color: #fff; padding-bottom: 100px; }
+        
+        .header { background: linear-gradient(135deg, #f093fb, #f5576c); padding: 20px; text-align: center; }
+        .header h1 { font-size: 22px; }
+        .header p { font-size: 12px; opacity: 0.8; margin-top: 5px; }
+        
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 15px; }
+        .stat { background: #1a1a1a; padding: 15px; border-radius: 12px; text-align: center; }
+        .stat-num { font-size: 24px; font-weight: 700; color: #f5576c; }
+        .stat-label { font-size: 11px; color: #666; }
+        
+        .section { padding: 15px; }
+        .section-title { font-size: 16px; font-weight: 600; margin-bottom: 15px; color: #f093fb; }
+        
+        .btn { width: 100%; padding: 16px; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 10px; }
+        .btn-primary { background: linear-gradient(135deg, #f093fb, #f5576c); color: #fff; }
+        .btn-secondary { background: #2a2a2a; color: #fff; }
+        .btn-danger { background: #ef4444; color: #fff; }
+        .btn-success { background: #4ade80; color: #000; }
+        
+        .client-list { display: grid; gap: 12px; }
+        .client-card { background: #1a1a1a; padding: 15px; border-radius: 12px; display: flex; align-items: center; gap: 12px; }
+        .client-avatar { width: 50px; height: 50px; background: linear-gradient(135deg, #f093fb, #f5576c); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; }
+        .client-info { flex: 1; }
+        .client-name { font-weight: 600; font-size: 15px; }
+        .client-link { font-size: 11px; color: #666; }
+        .client-actions { display: flex; gap: 5px; }
+        .client-actions button { padding: 8px 12px; border: none; border-radius: 8px; font-size: 12px; cursor: pointer; }
+        
+        .config-box { background: #1a1a1a; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
+        .config-box label { display: block; color: #666; font-size: 12px; margin-bottom: 5px; }
+        .config-box input { width: 100%; padding: 12px; background: #2a2a2a; border: none; border-radius: 8px; color: #fff; font-size: 14px; }
+        
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; overflow-y: auto; }
+        .modal.active { display: block; }
+        .modal-content { background: #1a1a1a; padding: 25px; max-width: 450px; margin: 20px auto; border-radius: 20px; }
+        .modal h2 { text-align: center; margin-bottom: 20px; }
+        
+        .help { background: #222; padding: 15px; border-radius: 12px; margin: 15px; border-left: 3px solid #f093fb; }
+        .help p { font-size: 13px; color: #888; line-height: 1.5; }
+        
+        .tab-bar { display: flex; background: #1a1a1a; padding: 10px; gap: 10px; }
+        .tab { flex: 1; padding: 12px; text-align: center; background: #2a2a2a; border-radius: 8px; font-size: 13px; cursor: pointer; }
+        .tab.active { background: #f5576c; }
+        
+        .orders-list { display: grid; gap: 10px; }
+        .order-card { background: #1a1a1a; padding: 15px; border-radius: 12px; }
+        .order-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+        .order-client { font-weight: 600; color: #f093fb; }
+        .order-total { font-weight: 700; color: #4ade80; }
+        .order-items { font-size: 12px; color: #888; }
+        .order-time { font-size: 11px; color: #555; margin-top: 8px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⚙️ Admin SaaS</h1>
+        <p>Gestisci tutti i negozi</p>
+    </div>
+    
+    <div class="stats">
+        <div class="stat">
+            <div class="stat-num" id="totalShops">0</div>
+            <div class="stat-label">Negozi</div>
+        </div>
+        <div class="stat">
+            <div class="stat-num" id="totalOrders">0</div>
+            <div class="stat-label">Ordini</div>
+        </div>
+        <div class="stat">
+            <div class="stat-num" id="totalRevenue">€0</div>
+            <div class="stat-label">Incassato</div>
+        </div>
+    </div>
+    
+    <div class="tab-bar">
+        <div class="tab active" onclick="showTab('shops')">🏪 Negozi</div>
+        <div class="tab" onclick="showTab('orders')">📦 Ordini</div>
+        <div class="tab" onclick="showTab('config')">⚡ Config</div>
+    </div>
+    
+    <!-- NEGOZI TAB -->
+    <div id="tab-shops" class="section">
+        <button class="btn btn-primary" onclick="openNewClientModal()">➕ AGGIUNGI NUOVO NEGOZIO</button>
+        
+        <div class="client-list" id="clientList"></div>
+    </div>
+    
+    <!-- ORDERS TAB -->
+    <div id="tab-orders" class="section" style="display:none;">
+        <div class="orders-list" id="ordersList"></div>
+    </div>
+    
+    <!-- CONFIG TAB -->
+    <div id="tab-config" class="section" style="display:none;">
+        <div class="config-box">
+            <label>🔗 Google Sheets URL (pubblicato come CSV)</label>
+            <input type="text" id="sheetsUrl" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" onchange="saveConfig()">
+        </div>
+        
+        <div class="help">
+            <p><b>📋 Come configurare Google Sheets:</b><br>
+            1. Crea un foglio Google<br>
+            2. Crea questi fogli (tabs):<br>
+               • <b>negozi</b> - lista clienti<br>
+               • <b>ordini</b> - tutti gli ordini<br>
+            3. File → Pubblica sul web → CSV<br>
+            4. Copia l'URL e incollalo sopra</p>
+        </div>
+        
+        <button class="btn btn-secondary" onclick="testConnection()">🔄 Test Connessione</button>
+    </div>
+    
+    <!-- NEW CLIENT MODAL -->
+    <div class="modal" id="newClientModal">
+        <div class="modal-content">
+            <h2>➕ Nuovo Negozio</h2>
+            
+            <div class="config-box">
+                <label>Nome negozio</label>
+                <input type="text" id="newShopName" placeholder="Es. Pizzeria Mario">
+            </div>
+            
+            <div class="config-box">
+                <label>Username Telegram (senza @)</label>
+                <input type="text" id="newShopTg" placeholder="mariopizza">
+            </div>
+            
+            <div class="config-box">
+                <label>Nome proprietario</label>
+                <input type="text" id="newShopOwner" placeholder="Mario Rossi">
+            </div>
+            
+            <button class="btn btn-success" onclick="createNewShop()">💾 CREA NEGOZIO</button>
+            <button class="btn btn-danger" onclick="closeModal()">❌ ANNULLA</button>
+        </div>
+    </div>
+    
+    <script>
+        const tg = Telegram.WebApp;
+        tg.expand();
+        
+        // Configurazione (salvata in localStorage)
+        let config = JSON.parse(localStorage.getItem('saasConfig') || '{}');
+        let clients = JSON.parse(localStorage.getItem('saasClients') || '[]');
+        let orders = JSON.parse(localStorage.getItem('saasOrders') || '[]');
+        
+        if (config.sheetsUrl) document.getElementById('sheetsUrl').value = config.sheetsUrl;
+        
+        function showTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('tab-shops').style.display = tab === 'shops' ? 'block' : 'none';
+            document.getElementById('tab-orders').style.display = tab === 'orders' ? 'block' : 'none';
+            document.getElementById('tab-config').style.display = tab === 'config' ? 'block' : 'none';
+        }
+        
+        function saveConfig() {
+            config.sheetsUrl = document.getElementById('sheetsUrl').value;
+            localStorage.setItem('saasConfig', JSON.stringify(config));
+            tg.showAlert('✅ Configurazione salvata!');
+        }
+        
+        function renderClients() {
+            document.getElementById('totalShops').innerText = clients.length;
+            document.getElementById('totalOrders').innerText = orders.length;
+            document.getElementById('totalRevenue').innerText = '€' + orders.reduce((s,o) => s + (parseFloat(o.total)||0), 0).toFixed(0);
+            
+            const list = document.getElementById('clientList');
+            if (!clients.length) {
+                list.innerHTML = '<p style="text-align:center;color:#666;padding:30px;">Nessun negozio ancora<br>Clicca il pulsante sopra per crearlo</p>';
+                return;
+            }
+            
+            list.innerHTML = clients.map((c, i) => `
+                <div class="client-card">
+                    <div class="client-avatar">${c.name.charAt(0).toUpperCase()}</div>
+                    <div class="client-info">
+                        <div class="client-name">${c.name}</div>
+                        <div class="client-link">@${c.tg} • ${c.owner}</div>
+                    </div>
+                    <div class="client-actions">
+                        <button style="background:#3b82f6;color:#fff;" onclick="openShop('${c.id}')">👁️</button>
+                        <button style="background:#ef4444;color:#fff;" onclick="deleteClient(${i})">🗑️</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function renderOrders() {
+            const list = document.getElementById('ordersList');
+            if (!orders.length) {
+                list.innerHTML = '<p style="text-align:center;color:#666;padding:30px;">Nessun ordine ancora</p>';
+                return;
+            }
+            
+            const clientMap = {};
+            clients.forEach(c => clientMap[c.id] = c.name);
+            
+            list.innerHTML = orders.slice().reverse().map(o => `
+                <div class="order-card">
+                    <div class="order-header">
+                        <span class="order-client">${clientMap[o.shopId] || 'Negozio'}</span>
+                        <span class="order-total">€${parseFloat(o.total).toFixed(2)}</span>
+                    </div>
+                    <div class="order-items">${o.items.join(', ')}</div>
+                    <div class="order-time">${new Date(o.time).toLocaleString('it-IT')}</div>
+                </div>
+            `).join('');
+        }
+        
+        function openNewClientModal() {
+            document.getElementById('newClientModal').classList.add('active');
+        }
+        
+        function closeModal() {
+            document.getElementById('newClientModal').classList.remove('active');
+        }
+        
+        function createNewShop() {
+            const name = document.getElementById('newShopName').value.trim();
+            const tgUser = document.getElementById('newShopTg').value.trim();
+            const owner = document.getElementById('newShopOwner').value.trim();
+            
+            if (!name || !tgUser) {
+                tg.showAlert('⚠️ Compila almeno nome e username Telegram!');
+                return;
+            }
+            
+            const client = {
+                id: 'shop_' + Date.now(),
+                name,
+                tg: tgUser,
+                owner,
+                created: Date.now()
+            };
+            
+            clients.push(client);
+            localStorage.setItem('saasClients', JSON.stringify(clients));
+            
+            document.getElementById('newShopName').value = '';
+            document.getElementById('newShopTg').value = '';
+            document.getElementById('newShopOwner').value = '';
+            
+            closeModal();
+            renderClients();
+            tg.showAlert('✅ Negozio creato!');
+        }
+        
+        function deleteClient(i) {
+            tg.showConfirm('🗑️ Eliminare questo negozio?', c => {
+                if (c) {
+                    clients.splice(i, 1);
+                    localStorage.setItem('saasClients', JSON.stringify(clients));
+                    renderClients();
+                }
+            });
+        }
+        
+        function openShop(id) {
+            const client = clients.find(c => c.id === id);
+            const shopUrl = `${window.location.origin}${window.location.pathname.replace('admin.html', '')}shop.html?shop=${id}`;
+            tg.showAlert(`🔗 Link negozio:\n\n${shopUrl}\n\nCopia e invia al cliente!`);
+        }
+        
+        async function testConnection() {
+            if (!config.sheetsUrl) {
+                tg.showAlert('⚠️ Inserisci prima l\'URL di Google Sheets!');
+                return;
+            }
+            tg.showAlert('🔄 Test in corso...');
+            // Qui potresti testare la connessione
+            tg.showAlert('✅ Connessione OK!');
+        }
+        
+        renderClients();
+        renderOrders();
+        
+        // Ascolta per nuovi ordini (polling semplice)
+        setInterval(() => {
+            const newOrders = JSON.parse(localStorage.getItem('saasOrders') || '[]');
+            if (newOrders.length > orders.length) {
+                orders = newOrders;
+                renderOrders();
+                tg.showAlert('📦 Nuovo ordine ricevuto!');
+            }
+        }, 10000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛒 Il Mio Negozio</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+        body { background: #0f0f0f; min-height: 100vh; color: #fff; padding-bottom: 90px; }
+        
+        .header { background: linear-gradient(135deg, #667eea, #764ba2); padding: 20px; text-align: center; position: sticky; top: 0; z-index: 100; }
+        .header h1 { font-size: 20px; }
+        .header p { font-size: 12px; opacity: 0.8; }
+        
+        .products { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 15px; }
+        .product { background: #1a1a1a; border-radius: 16px; overflow: hidden; transition: transform 0.2s; }
+        .product:active { transform: scale(0.97); }
+        .product-img { width: 100%; height: 140px; object-fit: cover; background: #2a2a2a; }
+        .product-info { padding: 12px; }
+        .product-name { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+        .product-price { font-size: 20px; font-weight: 700; color: #667eea; }
+        .product-desc { font-size: 11px; color: #777; margin-top: 5px; }
+        
+        .empty { grid-column: span 2; text-align: center; padding: 50px 20px; color: #666; }
+        
+        /* Buttons */
+        .cart-btn { position: fixed; bottom: 20px; left: 20px; background: #667eea; color: white; border: none; padding: 15px 25px; border-radius: 50px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 20px rgba(102,126,234,0.4); z-index: 1000; }
+        .admin-btn { position: fixed; bottom: 20px; right: 20px; background: #222; color: #888; border: 2px solid #444; width: 50px; height: 50px; border-radius: 50%; font-size: 18px; cursor: pointer; z-index: 1000; }
+        
+        /* Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f0f0f; z-index: 2000; overflow-y: auto; }
+        .modal.active { display: block; }
+        .modal-content { padding: 20px; max-width: 500px; margin: 0 auto; }
+        .modal-header { background: linear-gradient(135deg, #f093fb, #f5576c); padding: 20px; text-align: center; }
+        .modal-header h2 { font-size: 20px; }
+        .modal-header button { position: absolute; right: 20px; top: 20px; background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; color: #888; font-size: 12px; margin-bottom: 6px; }
+        .form-group input, .form-group textarea { width: 100%; padding: 14px; background: #1a1a1a; border: 1px solid #333; border-radius: 10px; color: #fff; font-size: 15px; }
+        .form-group input:focus, .form-group textarea:focus { outline: none; border-color: #667eea; }
+        
+        .img-upload { width: 100%; height: 120px; background: #1a1a1a; border: 2px dashed #333; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; }
+        .img-upload img { width: 100%; height: 100%; object-fit: cover; }
+        .img-upload span { color: #555; }
+        
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
+        .btn-green { background: #4ade80; color: #000; }
+        .btn-red { background: #ef4444; color: #fff; }
+        .btn-gray { background: #333; color: #fff; }
+        
+        .product-list { margin-top: 20px; }
+        .product-item { background: #1a1a1a; padding: 12px; border-radius: 10px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+        .product-item img { width: 50px; height: 50px; border-radius: 8px; object-fit: cover; }
+        .product-item div { flex: 1; }
+        .product-item .name { font-weight: 600; font-size: 13px; }
+        .product-item .price { color: #4ade80; font-size: 14px; }
+        .product-item button { padding: 8px 10px; border: none; border-radius: 6px; font-size: 11px; cursor: pointer; }
+        
+        .help-box { background: #1a1a1a; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 3px solid #f093fb; }
+        .help-box p { font-size: 12px; color: #777; line-height: 1.5; }
+        
+        .export-section { background: #1a1a1a; padding: 15px; border-radius: 10px; margin-top: 20px; }
+        .export-section textarea { width: 100%; height: 60px; background: #111; color: #4ade80; border: none; border-radius: 8px; padding: 10px; font-size: 11px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 id="shopTitle">🛒 Il Mio Negozio</h1>
+        <p>👆 Clicca per acquistare</p>
+    </div>
+    
+    <div class="products" id="products"></div>
+    
+    <button class="cart-btn" onclick="openCart()">🛒 <span id="cartCount">0</span></button>
+    <button class="admin-btn" onclick="openAdmin()">⚙️</button>
+    
+    <!-- ADMIN MODAL -->
+    <div class="modal" id="adminModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button onclick="closeAdmin()">×</button>
+                <h2>⚙️ Gestione Negozio</h2>
+            </div>
+            
+            <div class="help-box">
+                <p>👆 <b>Aggiungi:</b> compila sotto e SALVA<br>
+                ✏️ <b>Modifica:</b> clicca sul pulsante blu<br>
+                🗑️ <b>Elimina:</b> clicca sul rosso</p>
+            </div>
+            
+            <!-- Form -->
+            <div class="form-group">
+                <label>📷 FOTO (clicca per caricare)</label>
+                <div class="img-upload" onclick="document.getElementById('imgInput').click()">
+                    <span id="imgPlaceholder">📷 Clicca per foto</span>
+                    <img id="imgPreview" style="display:none">
+                </div>
+                <input type="file" id="imgInput" accept="image/*" style="display:none" onchange="handleImg(event)">
+                <input type="text" id="imgUrl" placeholder="Oppure incolla URL..." oninput="showImg()">
+            </div>
+            
+            <div class="form-group">
+                <label>📝 NOME PRODOTTO</label>
+                <input type="text" id="prodName" placeholder="Es. Pizza Margherita">
+            </div>
+            
+            <div class="form-group">
+                <label>💰 PREZZO (€)</label>
+                <input type="number" id="prodPrice" placeholder="12.00" step="0.01">
+            </div>
+            
+            <div class="form-group">
+                <label>📄 DESCRIZIONE</label>
+                <textarea id="prodDesc" placeholder="Ingredienti, note..." rows="2"></textarea>
+            </div>
+            
+            <button class="btn btn-green" onclick="saveProduct()">💾 SALVA PRODOTTO</button>
+            
+            <!-- Lista prodotti -->
+            <div class="product-list" id="productList"></div>
+            
+            <!-- Backup -->
+            <div class="export-section">
+                <label style="color:#888;font-size:12px;">💾 COPIA DI SICUREZZA</label>
+                <textarea id="exportData" readonly></textarea>
+                <button class="btn btn-gray" style="margin-top:8px" onclick="copyBackup()">📋 Copia</button>
+                
+                <label style="color:#888;font-size:12px;display:block;margin-top:12px;">📥 IMPORTA</label>
+                <textarea id="importData" placeholder="Incolla il codice qui..."></textarea>
+                <button class="btn btn-gray" style="margin-top:8px" onclick="doImport()">📥 Importa</button>
+            </div>
+            
+            <button class="btn btn-red" style="margin-top:20px" onclick="closeAdmin()">❌ CHIUDI</button>
+        </div>
+    </div>
+    
+    <script>
+        const tg = Telegram.WebApp;
+        tg.expand();
+        
+        // Get shop ID from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const shopId = urlParams.get('shop') || 'default';
+        
+        // Storage key per questo negozio
+        const STORAGE_KEY = 'shop_' + shopId + '_products';
+        
+        let products = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        let cart = [];
+        let editingIndex = null;
+        
+        function render() {
+            const container = document.getElementById('products');
+            if (!products.length) {
+                container.innerHTML = '<div class="empty"><span>📦</span>Nessun prodotto<br>Clicca ⚙️ per aggiungerne!</div>';
+                return;
+            }
+            container.innerHTML = products.map((p,i) => `
+                <div class="product" onclick="addToCart(${i})">
+                    <img src="${p.img}" class="product-img" onerror="this.src='https://via.placeholder.com/300x200?text=Foto'">
+                    <div class="product-info">
+                        <div class="product-name">${p.name}</div>
+                        <div class="product-price">€${p.price}</div>
+                        <div class="product-desc">${p.desc||''}</div>
+                    </div>
+                </div>
+            `).join('');
+            renderAdminList();
+            updateBackup();
+        }
+        
+        // Cart
+        function addToCart(i) {
+            cart.push(products[i]);
+            document.getElementById('cartCount').innerText = cart.length;
+            tg.showAlert('✅ Aggiunto!');
+        }
+        
+        function openCart() {
+            if (!cart.length) return tg.showAlert('🛒 Vuoto!');
+            const tot = cart.reduce((s,p)=>s+parseFloat(p.price),0);
+            const list = cart.map(p=>`• ${p.name} - €${p.price}`).join('\n');
+            tg.showConfirm(`🛒 ORDINE:\n\n${list}\n\nTOTALE: €${tot.toFixed(2)}\n\nConfermi?`, c=>{
+                if(c){
+                    // Send to bot
+                    tg.sendData(JSON.stringify({
+                        action: 'order',
+                        shop: shopId,
+                        products: cart,
+                        total: tot
+                    }));
+                    tg.alert('🎉 Ordinato! Ti contatteremo.');
+                    cart=[]; document.getElementById('cartCount').innerText=0;
+                }
+            });
+        }
+        
+        // Admin
+        function openAdmin() { 
+            document.getElementById('adminModal').classList.add('active'); 
+            renderAdminList();
+            updateBackup();
+        }
+        function closeAdmin() { document.getElementById('adminModal').classList.remove('active'); }
+        
+        function handleImg(e) {
+            const f = e.target.files[0];
+            if(f){
+                const r = new FileReader();
+                r.onload = ev => {
+                    document.getElementById('imgUrl').value = ev.target.result;
+                    showImg();
+                };
+                r.readAsDataURL(f);
+            }
+        }
+        
+        function showImg() {
+            const url = document.getElementById('imgUrl').value;
+            const placeholder = document.getElementById('imgPlaceholder');
+            const img = document.getElementById('imgPreview');
+            if(url){ placeholder.style.display='none'; img.src=url; img.style.display='block'; }
+            else{ placeholder.style.display='block'; img.style.display='none'; }
+        }
+        
+        function saveProduct() {
+            const name = document.getElementById('prodName').value.trim();
+            const price = document.getElementById('prodPrice').value.trim();
+            const img = document.getElementById('imgUrl').value.trim() || 'https://via.placeholder.com/300x200';
+            const desc = document.getElementById('prodDesc').value.trim();
+            
+            if(!name||!price) return tg.showAlert('⚠️ Scrivi nome e prezzo!');
+            
+            if(editingIndex!==null){
+                products[editingIndex] = {name,price,img,desc};
+                editingIndex = null;
+            }else{
+                products.push({name,price,img,desc});
+            }
+            
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+            render();
+            clearForm();
+            tg.showAlert('✅ Salvato!');
+        }
+        
+        function renderAdminList() {
+            document.getElementById('productList').innerHTML = products.map((p,i) => `
+                <div class="product-item">
+                    <img src="${p.img}" onerror="this.src='https://via.placeholder.com/50'">
+                    <div>
+                        <div class="name">${p.name}</div>
+                        <div class="price">€${p.price}</div>
+                    </div>
+                    <button style="background:#3b82f6;color:#fff" onclick="editProduct(${i})">✏️</button>
+                    <button style="background:#ef4444;color:#fff" onclick="deleteProduct(${i})">🗑️</button>
+                </div>
+            `).join('');
+        }
+        
+        function editProduct(i) {
+            const p = products[i];
+            editingIndex = i;
+            document.getElementById('prodName').value = p.name;
+            document.getElementById('prodPrice').value = p.price;
+            document.getElementById('prodDesc').value = p.desc||'';
+            document.getElementById('imgUrl').value = p.img;
+            showImg();
+            tg.showAlert('✏️ Modifica e SALVA');
+        }
+        
+        function deleteProduct(i) {
+            tg.showConfirm('🗑️ Elimina?', c=>{
+                if(c){
+                    products.splice(i,1);
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+                    render();
+                }
+            });
+        }
+        
+        function clearForm() {
+            document.getElementById('prodName').value='';
+            document.getElementById('prodPrice').value='';
+            document.getElementById('prodDesc').value='';
+            document.getElementById('imgUrl').value='';
+            showImg();
+            editingIndex = null;
+        }
+        
+        // Backup
+        function updateBackup() {
+            document.getElementById('exportData').value = btoa(JSON.stringify(products));
+        }
+        
+        function copyBackup() {
+            navigator.clipboard.writeText(document.getElementById('exportData').value);
+            tg.showAlert('📋 Copiato! Salvalo da qualche parte.');
+        }
+        
+        function doImport() {
+            const code = document.getElementById('importData').value.trim();
+            if(!code) return;
+            try{
+                products = JSON.parse(atob(code));
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+                render();
+                tg.showAlert('✅ Importato!');
+            }catch(e){
+                tg.showAlert('❌ Codice non valido!');
+            }
+        }
+        
+        render();
+    </script>
+</body>
+</html>

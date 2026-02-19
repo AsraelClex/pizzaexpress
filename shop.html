@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛒 Negozio</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+        body { background: #0f0f0f; min-height: 100vh; color: #fff; padding-bottom: 80px; }
+        
+        .header { background: linear-gradient(135deg, #667eea, #764ba2); padding: 20px; text-align: center; position: sticky; top: 0; z-index: 100; }
+        .header h1 { font-size: 20px; margin-bottom: 5px; }
+        .header p { font-size: 12px; opacity: 0.8; }
+        
+        .loading { text-align: center; padding: 40px; color: #888; }
+        
+        .products { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 15px; }
+        .product { background: #1a1a1a; border-radius: 16px; overflow: hidden; transition: transform 0.2s; }
+        .product:active { transform: scale(0.97); }
+        .product-img { width: 100%; height: 140px; object-fit: cover; background: #2a2a2a; }
+        .product-info { padding: 12px; }
+        .product-name { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+        .product-price { font-size: 20px; font-weight: 700; color: #667eea; }
+        .product-desc { font-size: 11px; color: #777; margin-top: 5px; }
+        
+        .empty { grid-column: span 2; text-align: center; padding: 50px 20px; color: #666; }
+        
+        .cart-btn { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #667eea; color: white; border: none; padding: 15px 40px; border-radius: 50px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 20px rgba(102,126,234,0.4); z-index: 1000; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 id="shopName">🛒 Negozio</h1>
+        <p>👆 Clicca per acquistare</p>
+    </div>
+    
+    <div class="loading" id="loading">⏳ Caricamento...</div>
+    <div class="products" id="products"></div>
+    
+    <button class="cart-btn" onclick="openCart()">🛒 Carrello (<span id="cartCount">0</span>)</button>
+    
+    <script>
+        const tg = Telegram.WebApp;
+        tg.expand();
+        
+        // Leggi shop ID dall'URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const shopId = urlParams.get('shop');
+        
+        // Configurazione -Cambia questo URL!
+        const CONFIG_URL = 'https://raw.githubusercontent.com/TUO-ACCOUNT/TUO-REPO/main/config.json';
+        
+        let config = {};
+        let products = [];
+        let cart = [];
+        
+        async function init() {
+            try {
+                // Carica configurazione
+                const configRes = await fetch(CONFIG_URL);
+                config = await configRes.json();
+                
+                document.getElementById('shopName').textContent = config.shopName || '🛒 Negozio';
+                
+                // Carica prodotti (da Google Sheets o JSON)
+                if (config.productsUrl) {
+                    const prodRes = await fetch(config.productsUrl);
+                    const csv = await prodRes.text();
+                    products = parseCSV(csv);
+                }
+                
+                document.getElementById('loading').style.display = 'none';
+                renderProducts();
+            } catch(e) {
+                document.getElementById('loading').innerHTML = '❌ Errore caricamento<br>Contatta il gestore!';
+            }
+        }
+        
+        function parseCSV(text) {
+            const lines = text.trim().split('\n');
+            const result = [];
+            for (let i = 1; i < lines.length; i++) {
+                const cols = lines[i].split(',');
+                if (cols.length >= 2) {
+                    result.push({
+                        name: cols[0]?.replace(/"/g,'') || 'Prodotto',
+                        price: cols[1]?.replace(/"/g,'') || '0',
+                        image: cols[2]?.replace(/"/g,'') || '',
+                        description: cols[3]?.replace(/"/g,'') || ''
+                    });
+                }
+            }
+            return result;
+        }
+        
+        function renderProducts() {
+            const container = document.getElementById('products');
+            if (!products.length) {
+                container.innerHTML = '<div class="empty">📦 Nessun prodotto disponibile</div>';
+                return;
+            }
+            container.innerHTML = products.map((p,i) => `
+                <div class="product" onclick="addToCart(${i})">
+                    <img src="${p.image || 'https://via.placeholder.com/300x200'}" class="product-img" onerror="this.src='https://via.placeholder.com/300x200?text=Foto'">
+                    <div class="product-info">
+                        <div class="product-name">${p.name}</div>
+                        <div class="product-price">€${p.price}</div>
+                        <div class="product-desc">${p.description || ''}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function addToCart(i) {
+            cart.push(products[i]);
+            document.getElementById('cartCount').innerText = cart.length;
+            tg.showAlert('✅ Aggiunto al carrello!');
+        }
+        
+        function openCart() {
+            if (!cart.length) return tg.showAlert('🛒 Carrello vuoto!');
+            const tot = cart.reduce((s,p)=>s+parseFloat(p.price),0);
+            const list = cart.map(p=>`• ${p.name} - €${p.price}`).join('\n');
+            tg.showConfirm(`🛒 ORDINE:\n\n${list}\n\nTOTALE: €${tot.toFixed(2)}\n\nConfermi?`, c=>{
+                if(c){
+                    tg.sendData(JSON.stringify({
+                        action: 'order',
+                        shopId: shopId,
+                        products: cart,
+                        total: tot,
+                        customer: tg.initDataUnsafe?.user
+                    }));
+                    tg.alert('🎉 Ordine inviato! Ti contatteremo.');
+                    cart = [];
+                    document.getElementById('cartCount').innerText = 0;
+                }
+            });
+        }
+        
+        init();
+    </script>
+</body>
+</html>
